@@ -1,59 +1,65 @@
-import imaplib
-import email
-import os
-import base64
-import requests
 import json
+import requests
+import base64
 
-# Credenciais OAuth2
+# Configurações de autenticação
 client_id = 'ae05af2b-1606-4630-9df6-0d1869ce3304'
 client_secret = 'e9fb09b1-8343-4413-b88b-47a3b517a0d2'
+tenant_id = 'e2d62140-be09-4eb0-98a4-b31d13d73626'
+scopes = ['https://graph.microsoft.com/.default']
 username = 'conta@billapp.com.br'
 password = 'Ram12717'
-scopes = ['https://outlook.office.com/mail.read']
-tenant_id = 'e2d62140-be09-4eb0-98a4-b31d13d73626'
 
-# Obter token de acesso
-api_url = 'https://outlook.office.com/api/v2.0/me/messages'
-oauth_url = 'https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token'
+# URL para obter o access token
+token_url = f'https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token'
 
+# Credenciais para autenticação OAuth2
 data = {
-    'grant_type': 'password',
     'client_id': client_id,
+    'scope': ' '.join(scopes),
     'client_secret': client_secret,
+    'grant_type': 'password',
     'username': username,
-    'password': password,
-    'scope': scopes
+    'password': password
 }
-response = requests.post(oauth_url, data=data)
 
-# verificar a resposta da solicitação POST
-if response.status_code != 200:
-    print('Erro:', response.status_code, response.text)
-    exit()
+# Codifica as credenciais como base64
+credentials = f"{client_id}:{client_secret}"
+credentials_bytes = credentials.encode('ascii')
+credentials_b64 = base64.b64encode(credentials_bytes).decode('ascii')
 
-# verificar o JSON retornado
-json_response = response.json()
-if 'access_token' not in json_response:
-    print('Erro: a chave "access_token" não foi encontrada no JSON:', json_response)
-    exit()
+# Define o cabeçalho HTTP com as credenciais
+headers = {
+    'Authorization': f'Basic {credentials_b64}',
+    'Content-Type': 'application/x-www-form-urlencoded'
+}
 
+# Faz a requisição HTTP para obter o access token
+response = requests.post(token_url, data=data, headers=headers)
+response.raise_for_status()
+
+# Extrai o access token da resposta
 access_token = response.json()['access_token']
 
-headers = {
-    'Authorization': 'Bearer ' + access_token,
-    'Accept': 'application/json',
-    'Content-Type': 'application/json'
-}
+# Define o cabeçalho HTTP com o token de acesso
+headers = {'Authorization': f'Bearer {access_token}'}
+
+# URL da API para listar as mensagens
+api_url = 'https://graph.microsoft.com/v1.0/me/messages'
+
+# Faz a requisição HTTP para listar as mensagens
 response = requests.get(api_url, headers=headers)
+response.raise_for_status()
+
+# Extrai as mensagens da resposta
 messages = response.json()['value']
 
-# exibir as informações da mensagem
+# Exibe as informações das mensagens
 for message in messages:
-    print('From:', message['From']['EmailAddress']['Name'])
-    print('Subject:', message['Subject'])
-    print('Body:', message['Body']['Content'])
-    print()
+    print(f"De: {message['from']['emailAddress']['name']}")
+    print(f"Assunto: {message['subject']}")
+    print(f"Corpo: {message['body']['content']}")
+    print("-" * 40)
 
 
 #Conectando ao servidor do outlook com IMAP
