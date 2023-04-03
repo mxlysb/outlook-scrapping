@@ -1,66 +1,58 @@
 import imaplib
 import email
 import PyPDF4
-import msal
 import os
 import requests
 from io import BytesIO
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from requests_oauthlib import OAuth2Session
-
-
-def authenticate_with_oauth2(client_id, client_secret, redirect_uri, scope):
-    """
-    Authenticate with OAuth2 and return the access token.
-
-    :param client_id: the client ID of the OAuth2 app
-    :param client_secret: the client secret of the OAuth2 app
-    :param redirect_uri: the redirect URI of the OAuth2 app
-    :param scope: the list of OAuth2 scopes to request
-    """
-    oauth = OAuth2Session(client_id, redirect_uri=redirect_uri, scope=scope)
-
-    authorization_url, state = oauth.authorization_url('https://login.microsoftonline.com/common/oauth2/v2.0/authorize')
-
-    # Redirect the user to the authorization URL and request the authorization code
-
-    # Get the authorization code from the user
-
-    token = oauth.fetch_token('https://login.microsoftonline.com/common/oauth2/v2.0/token', authorization_response='URL de redirecionamento com o código de autorização', client_secret=client_secret)
-
-    return token['access_token']
-
+from oauthlib.oauth2 import BackendApplicationClient
+import base64
+import json
+from msal import PublicClientApplication
 
 # Define the app credentials
-client_id = 'ID do aplicativo'
-client_secret = 'Segredo do cliente'
-redirect_uri = 'URL de redirecionamento'
+client_id = '44396eda-0f9d-456d-9ed0-a7244cceac13'
+client_secret = 'y258Q~6uDoocWqMmsDj7PM4_4v5e~ZMXWPEklbg6'
+
+email_login = 'administrador@billapp.com.br'
 
 # Define the necessary permissions
-scope = ['https://outlook.office.com/IMAP.AccessAsUser.All']
+scope = ['https://graph.microsoft.com/.default']
 
-# Authenticate with OAuth2
-access_token = authenticate_with_oauth2(client_id, client_secret, redirect_uri, scope)
+# Define o URL de autorização e o URL de token
+AUTHORITY_URL = f"https://login.microsoftonline.com/e2d62140-be09-4eb0-98a4-b31d13d73626"
+TOKEN_URL = f"https://login.microsoftonline.com/e2d62140-be09-4eb0-98a4-b31d13d73626/oauth2/v2.0/token"
 
-# Connect to the Outlook email server with IMAP
-email_server = imaplib.IMAP4_SSL("outlook.office365.com")
+# Cria uma instância do cliente MSAL
+app = PublicClientApplication(client_id, authority=AUTHORITY_URL)
 
-# Set the credentials
-email_login = "administrador@billapp.com.br"
-email_password = "3i11@99P"
+# Faz a autenticação do usuário
+result = None
+accounts = app.get_accounts(username=email_login)
+if accounts:
+    # Obtém um token para o usuário autenticado
+    result = app.acquire_token_silent(scope, account=accounts[0])
 
-# Authenticate using the access token
-email_server.authenticate('XOAUTH2', lambda x: f'user={email_login}\x01auth=Bearer {access_token}\x01\x01')
+if not result:
+    # Faz a autenticação interativa do usuário
+    result = app.acquire_token_interactive(scope)
 
-# Loop through the inbox
-email_server.select(mailbox='inbox', readonly=True)
-responses, email_ids = email_server.search(None, 'UNSEEN')
+# Obtém o token de acesso
+access_token = result["access_token"]
+
+# Usa o token de acesso para fazer uma requisição à API do Outlook
+response = requests.get("https://graph.microsoft.com/v1.0/me/messages", headers={"Authorization": f"Bearer {access_token}"})
+
+# Imprime a resposta
+print(response.json())
+
+
 
 def download_pdf(url):
     """
     Faz o download do arquivo PDF a partir de uma URL.
-
     :param url: a URL do arquivo PDF
     """
     filename = url.split("/")[-1]
@@ -86,7 +78,6 @@ def download_pdf(url):
 def process_email_part(part):
     """
     Processa uma parte do email (pode ser uma mensagem, anexo ou corpo HTML)
-
     :param part: a parte do email a ser processada
     """
     content_type = part.get_content_type()
@@ -133,7 +124,6 @@ def process_email_part(part):
 def process_email(connectionObject, num):
     """
     Processa um email completo, incluindo todas as partes (mensagens, anexos, corpo HTML)
-
     :param connectionObject: objeto de conexão com a caixa de entrada do email
     :param num: número do email na caixa de entrada
     """
@@ -144,4 +134,3 @@ def process_email(connectionObject, num):
 
     for part in text_email.walk():
         process_email_part(part)
-
