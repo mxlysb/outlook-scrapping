@@ -11,6 +11,7 @@ from oauthlib.oauth2 import BackendApplicationClient
 import base64
 import json
 from msal import PublicClientApplication
+from exchangelib import Credentials, Account
 
 # Define the app credentials
 client_id = '44396eda-0f9d-456d-9ed0-a7244cceac13'
@@ -39,11 +40,13 @@ if not result:
     # Faz a autenticação interativa do usuário
     result = app.acquire_token_interactive(scope)
 
+print(result)
+
 # Obtém o token de acesso
 access_token = result["access_token"]
 
 # Usa o token de acesso para fazer uma requisição à API do Outlook
-response = requests.get("https://graph.microsoft.com/v1.0/me/messages", headers={"Authorization": f"Bearer {access_token}"})
+response = requests.get("https://graph.microsoft.com/v1.0/me/mailFolders/Inbox/messages?$top=10", headers={"Authorization": f"Bearer {access_token}"})
 
 # Imprime a resposta
 print(response.json())
@@ -120,6 +123,22 @@ def process_email_part(part):
 
         file.close()
 
+def mark_email_as_read(access_token, email_id):
+    """
+    Marca um e-mail como lido.
+    :param access_token: o token de acesso à API do Outlook
+    :param email_id: o ID do e-mail a ser marcado como lido
+    """
+    url = f"https://graph.microsoft.com/v1.0/me/messages/{email_id}"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "isRead": True
+    }
+    response = requests.patch(url, headers=headers, json=data)
+    response.raise_for_status()
 
 def process_email(connectionObject, num):
     """
@@ -134,3 +153,7 @@ def process_email(connectionObject, num):
 
     for part in text_email.walk():
         process_email_part(part)
+    
+    email_id = result.split()[0].decode('utf-8')
+    mark_email_as_read(access_token, email_id)
+
